@@ -1,0 +1,16 @@
+{
+  "model_type": "RandomForestRegressor (Ensemble of 12 Decision Trees)",
+  "features": [
+    "farmers_ahead",
+    "avg_processing_time",
+    "crop_quantity",
+    "active_counters",
+    "current_queue_length",
+    "historical_avg",
+    "day_of_week",
+    "time_slot_hour"
+  ],
+  "mae_minutes": 10.85,
+  "n_samples": 800,
+  "framework": "NumPy & Pandas Machine Learning Pipeline"
+}
