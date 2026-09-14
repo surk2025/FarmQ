@@ -7,7 +7,9 @@ dependencies = [
     "uvicorn",
     "motor",
     "python-dotenv",
+    "numpy",
     "requests"
+    
 ]
 
 [tool.vercel]
