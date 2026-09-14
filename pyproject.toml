@@ -10,6 +10,7 @@ dependencies = [
     "requests",
     "numpy",
     "pandas",
+    "google-auth",
     "scikit-learn"
     
 ]
