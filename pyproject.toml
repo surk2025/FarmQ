@@ -20,7 +20,7 @@ dependencies = [
 "requests",
 "joblib",
 "websockets",
-"python-jose",
+ 
 "httpx"
     
 ]
