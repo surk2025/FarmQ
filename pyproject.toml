@@ -3,15 +3,24 @@ name = "sihproject"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-  "fastapi",
-    "uvicorn",
-    "motor",
-    "python-dotenv",
-    "requests",
-    "numpy",
-    "pandas",
-    "google-auth",
-    "scikit-learn"
+ "fastapi",
+"uvicorn",
+"motor",
+"pymongo",
+"pydantic",
+"email-validator",
+"python-jose[cryptography]",
+"passlib[bcrypt]",
+"bcrypt",
+"python-multipart",
+"requests",
+"google-auth",
+"scikit-learn",
+"pandas",
+"numpy",
+"joblib",
+"websockets",
+"httpx"
     
 ]
 
