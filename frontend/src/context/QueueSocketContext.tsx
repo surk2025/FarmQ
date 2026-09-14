@@ -39,9 +39,18 @@ export const QueueSocketProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (!activeCenterId) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname;
-    // Vite proxy handles /ws or direct to 8000
-    const wsUrl = `${protocol}//${host}:8000/ws/queue/${activeCenterId}`;
+    const envWs = import.meta.env.VITE_WS_BASE_URL;
+    let wsUrl = '';
+    if (envWs) {
+      wsUrl = `${envWs.replace(/\/$/, '')}/ws/queue/${activeCenterId}`;
+    } else if (window.location.port === '5173' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      wsUrl = `${protocol}//${window.location.hostname}:8000/ws/queue/${activeCenterId}`;
+    } else {
+      wsUrl = `${protocol}//${window.location.host}/ws/queue/${activeCenterId}`;
+    }
+
+    let retryCount = 0;
+    const maxRetries = 4;
 
     const connectWs = () => {
       try {
@@ -50,6 +59,7 @@ export const QueueSocketProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
         ws.onopen = () => {
           setIsConnected(true);
+          retryCount = 0;
           console.log(`WebSocket connected to center: ${activeCenterId}`);
         };
 
@@ -65,13 +75,20 @@ export const QueueSocketProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
         ws.onclose = () => {
           setIsConnected(false);
-          // Try reconnecting in 3 seconds
-          reconnectTimeoutRef.current = setTimeout(connectWs, 3000);
+          // Try reconnecting with backoff if within retry limit
+          if (retryCount < maxRetries) {
+            retryCount += 1;
+            reconnectTimeoutRef.current = setTimeout(connectWs, 3000 * retryCount);
+          }
         };
 
         ws.onerror = (err) => {
-          console.warn('WebSocket error:', err);
-          ws.close();
+          console.warn('WebSocket connection notice:', err);
+          try {
+            ws.close();
+          } catch {
+            // Safe close
+          }
         };
       } catch (e) {
         console.warn('Failed to initialize WebSocket:', e);

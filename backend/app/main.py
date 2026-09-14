@@ -118,6 +118,17 @@ async def websocket_queue_endpoint(websocket: WebSocket, center_id: str):
     except Exception as e:
         ws_manager.disconnect(websocket, center_id)
 
+@app.get("/api")
+@app.get("/")
+async def api_root():
+    return {
+        "status": "online",
+        "service": "FarmQ API",
+        "version": "1.0.0",
+        "tagline": "Smart Agricultural Procurement & Queue Management System",
+        "message": "FarmQ backend is running successfully."
+    }
+
 @app.get("/api/health")
 async def health_check():
     return {
