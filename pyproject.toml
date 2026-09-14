@@ -2,8 +2,9 @@
 name = "sihproject"
 version = "0.1.0"
 requires-python = ">=3.11"
+
 dependencies = [
- "fastapi",
+    "fastapi",
     "uvicorn",
     "motor",
     "python-dotenv",
@@ -12,17 +13,15 @@ dependencies = [
     "pandas",
     "google-auth",
     "scikit-learn",
-   "pymongo",
-  "pydantic",
-"email-validator",
-"bcrypt",
-"python-multipart",
-"requests",
-"joblib",
-"websockets",
- 
-"httpx"
-    
+    "pymongo",
+    "pydantic",
+    "email-validator",
+    "bcrypt",
+    "python-multipart",
+    "joblib",
+    "websockets",
+    "httpx",
+    "python-jose"
 ]
 
 [tool.vercel]
