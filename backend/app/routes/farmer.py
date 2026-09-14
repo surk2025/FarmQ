@@ -23,7 +23,7 @@ async def get_bank_details(current_user: dict = Depends(get_current_user)):
     """
     db = get_database()
     user = await db.users.find_one({"_id": ObjectId(current_user["id"])}) if ObjectId.is_valid(current_user["id"]) else await db.users.find_one({"_id": current_user["id"]})
-    bank = user.get("bankDetails", {}) if user else {}
+    bank = (user.get("bankDetails") if user else None) or {}
     return FarmerBankDetailsResponse(
         accountHolderName=bank.get("accountHolderName", current_user.get("name", "Surjeet Kumar")),
         bankName=bank.get("bankName", "State Bank of India"),
@@ -241,7 +241,7 @@ async def get_farmer_dashboard(current_user: dict = Depends(get_current_user)):
 
     # Fetch user doc for profile & bank details
     user = await db.users.find_one({"_id": ObjectId(farmer_id)}) if ObjectId.is_valid(farmer_id) else await db.users.find_one({"_id": farmer_id})
-    user_bank = user.get("bankDetails", {}) if user else {}
+    user_bank = (user.get("bankDetails") if user else None) or {}
     fav_crops = user.get("favoriteCrops", ["Wheat", "Rice"]) if user else ["Wheat", "Rice"]
     
     # Fetch registered crops count

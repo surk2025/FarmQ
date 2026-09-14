@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import os
+import random
 from datetime import datetime, timedelta
 import httpx
 from httpx import ASGITransport
@@ -107,6 +108,29 @@ async def run_tests():
         assert "access_token" in data, "Token missing in response"
         token = data["access_token"]
         print("✓ [TEST 5] Farmer Registration Endpoint passed with token issue")
+
+        # 5B. Test Streamlined Farmer Registration (Personal & Location only, NO Bank Details)
+        test_mobile_nobank = f"98765{random.randint(10000, 99999)}"
+        test_email_nobank = f"nobank_{random.randint(1000, 9999)}@farmq.demo"
+        reg_nobank_payload = {
+            "name": "Kishan Singh",
+            "mobile": test_mobile_nobank,
+            "email": test_email_nobank,
+            "password": "SecurePassword123",
+            "confirmPassword": "SecurePassword123",
+            "state": "Punjab",
+            "district": "Patiala",
+            "village": "Samana",
+            "preferredLanguage": "pa",
+            "farmerType": "Small",
+            "mainCrops": ["Wheat"]
+        }
+        reg_nobank_res = await ac.post("/api/auth/farmer/register", json=reg_nobank_payload)
+        assert reg_nobank_res.status_code == 200, f"Registration without bank failed ({reg_nobank_res.status_code}): {reg_nobank_res.text}"
+        nobank_data = reg_nobank_res.json()
+        assert "access_token" in nobank_data, "Token missing in response for registration without bank"
+        assert nobank_data["user"]["village"] == "Samana"
+        print("✓ [TEST 5B] Streamlined Farmer Registration (Personal & Location only, no bank) passed!")
 
         # 6. Verify Masked Bank Details in Profile
         headers = {"Authorization": f"Bearer {token}"}

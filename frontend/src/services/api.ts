@@ -7,6 +7,12 @@ const api = axios.create({
   },
 });
 
+// Initialize token header if already present in storage
+const initialToken = localStorage.getItem('farmq_token');
+if (initialToken) {
+  api.defaults.headers.common['Authorization'] = `Bearer ${initialToken}`;
+}
+
 // Attach JWT token from localStorage to every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('farmq_token');
@@ -23,10 +29,12 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // If unauthorized and not on login page, redirect
-      if (!window.location.pathname.includes('/login')) {
+      // If unauthorized and not on login or register page, reset auth session
+      const path = window.location.pathname;
+      if (!path.includes('/login') && !path.includes('/register')) {
         localStorage.removeItem('farmq_token');
         localStorage.removeItem('farmq_user');
+        delete api.defaults.headers.common['Authorization'];
       }
     }
     return Promise.reject(error);

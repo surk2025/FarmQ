@@ -40,16 +40,19 @@ import { Analytics } from './pages/admin/Analytics';
 // Protected Route wrappers
 const ProtectedFarmerRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
+  const hasLocalToken = Boolean(localStorage.getItem('farmq_token'));
   if (loading) return <div className="p-12 text-center text-slate-500">Loading FarmQ...</div>;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated && !hasLocalToken) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
 
 const ProtectedAdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, user, loading } = useAuth();
+  const hasLocalToken = Boolean(localStorage.getItem('farmq_token'));
   if (loading) return <div className="p-12 text-center text-slate-500">Loading FarmQ...</div>;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (user?.role !== 'admin' && user?.role !== 'superadmin') {
+  if (!isAuthenticated && !hasLocalToken) return <Navigate to="/login" replace />;
+  const savedUser = user || (localStorage.getItem('farmq_user') ? JSON.parse(localStorage.getItem('farmq_user')!) : null);
+  if (savedUser?.role !== 'admin' && savedUser?.role !== 'superadmin') {
     return <Navigate to="/farmer/dashboard" replace />;
   }
   return <>{children}</>;

@@ -1119,37 +1119,49 @@ async def register_farmer(req: FarmerRegistrationRequest):
     if len(req.password) < 4:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Password must be at least 4 characters long.")
 
-    # 4. Bank Details Validation
-    bank = req.bankDetails
-    acc_clean = re.sub(r"\s+", "", bank.accountNumber).strip()
-    confirm_acc_clean = re.sub(r"\s+", "", bank.confirmAccountNumber).strip()
+    # 4. Bank Details Validation (Optional)
+    bank_info = None
+    if req.bankDetails:
+        bank = req.bankDetails
+        acc_clean = re.sub(r"\s+", "", bank.accountNumber).strip()
+        confirm_acc_clean = re.sub(r"\s+", "", bank.confirmAccountNumber).strip()
 
-    if not re.match(r"^\d{6,30}$", acc_clean):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Account Number must be numeric (6 to 30 digits)."
-        )
-    if acc_clean != confirm_acc_clean:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Account Number and Confirm Account Number do not match."
-        )
+        if not re.match(r"^\d{6,30}$", acc_clean):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Account Number must be numeric (6 to 30 digits)."
+            )
+        if acc_clean != confirm_acc_clean:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Account Number and Confirm Account Number do not match."
+            )
 
-    clean_ifsc = bank.ifscCode.strip().upper()
-    if not re.match(r"^[A-Z]{4}0[A-Z0-9]{6}$", clean_ifsc):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Invalid Indian IFSC Code format. Format: 4 letters, 0, then 6 alphanumeric characters (e.g. SBIN0001234)."
-        )
+        clean_ifsc = bank.ifscCode.strip().upper()
+        if not re.match(r"^[A-Z]{4}0[A-Z0-9]{6}$", clean_ifsc):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid Indian IFSC Code format. Format: 4 letters, 0, then 6 alphanumeric characters (e.g. SBIN0001234)."
+            )
 
-    if not bank.confirmed:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Please select the checkbox confirming that your bank details are correct."
-        )
+        if not bank.confirmed:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Please select the checkbox confirming that your bank details are correct."
+            )
 
-    # 5. Sensitive Bank Details Masking & Storage
-    masked_acc = mask_account_number(acc_clean)
+        masked_acc = mask_account_number(acc_clean)
+        bank_info = {
+            "accountHolderName": bank.accountHolderName.strip(),
+            "bankName": bank.bankName.strip(),
+            "accountNumberMasked": masked_acc,
+            "accountNumberLast4": acc_clean[-4:],
+            "ifscCode": clean_ifsc,
+            "branchName": bank.branchName.strip(),
+            "verified": True
+        }
+
+    # 5. Contact Details Masking
     masked_phone = mask_mobile_number(canonical_phone)
     masked_mail = mask_email_address(clean_email)
 
@@ -1173,15 +1185,7 @@ async def register_farmer(req: FarmerRegistrationRequest):
         "landUnit": req.landAreaUnit or "acre",
         "farmingExperience": float(req.farmingExperience or 5.0),
         "farmLocation": req.farmLocation,
-        "bankDetails": {
-            "accountHolderName": bank.accountHolderName.strip(),
-            "bankName": bank.bankName.strip(),
-            "accountNumberMasked": masked_acc,
-            "accountNumberLast4": acc_clean[-4:],
-            "ifscCode": clean_ifsc,
-            "branchName": bank.branchName.strip(),
-            "verified": True
-        },
+        "bankDetails": bank_info,
         "createdAt": datetime.utcnow(),
         "updatedAt": datetime.utcnow()
     }
@@ -1203,10 +1207,14 @@ async def register_farmer(req: FarmerRegistrationRequest):
             })
 
     # Welcome notification
+    notif_msg = f"Welcome {req.name}! Your farmer account has been created successfully."
+    if bank_info and bank_info.get("accountNumberMasked"):
+        notif_msg = f"Welcome {req.name}! Your farmer account and bank account ({bank_info['accountNumberMasked']}) have been verified successfully."
+
     await db.notifications.insert_one({
         "userId": user_id,
         "title": "🎉 Welcome to FarmQ!",
-        "message": f"Welcome {req.name}! Your farmer account and bank account ({masked_acc}) have been verified successfully.",
+        "message": notif_msg,
         "type": "system",
         "read": False,
         "createdAt": datetime.utcnow()

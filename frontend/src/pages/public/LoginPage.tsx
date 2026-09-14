@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   AlertCircle,
   ArrowRight,
-  ArrowLeft,
   RefreshCw,
   Edit2,
   Clock,
@@ -21,23 +20,11 @@ import {
   UserCheck,
   Eye,
   EyeOff,
-  CreditCard,
   Check
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import api from '../../services/api';
-
-const POPULAR_BANKS = [
-  'State Bank of India (SBI)',
-  'Punjab National Bank (PNB)',
-  'HDFC Bank',
-  'Bank of Baroda',
-  'Canara Bank',
-  'ICICI Bank',
-  'Union Bank of India',
-  'Central Bank of India'
-];
 
 interface LoginPageProps {
   initialTab?: 'login' | 'register';
@@ -45,12 +32,16 @@ interface LoginPageProps {
 
 export const LoginPage: React.FC<LoginPageProps> = ({ initialTab = 'login' }) => {
   const {
+    user,
+    isAuthenticated,
     sendOtp,
     verifyOtp,
     sendEmailOtp,
     verifyEmailOtp,
     loginWithGoogle,
-    loginAsDemo
+    loginAsDemo,
+    registerFarmer,
+    loginWithToken
   } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -86,14 +77,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialTab = 'login' }) =>
   const emailOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // ---------------------------------------------------------------------------
-  // RIGHT COLUMN: REGISTRATION STATES (2-Step Flow: 1. Personal & Location -> 2. Bank Details)
+  // RIGHT COLUMN: REGISTRATION STATES (Personal & Location only)
   // ---------------------------------------------------------------------------
-  // 1: Personal & Location Details
-  // 2: Bank Details Validation
-  // 3: Registration Success
-  const [regStep, setRegStep] = useState<number>(1);
-
-  // Step 1: Personal Information & Location Details
+  // Personal Information & Location Details
   const [regName, setRegName] = useState('');
   const [regMobile, setRegMobile] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -105,24 +91,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialTab = 'login' }) =>
   const [regDistrict, setRegDistrict] = useState('Karnal');
   const [regVillage, setRegVillage] = useState('Taraori');
 
-  // Step 2: Bank Details
-  const [bankAccountHolder, setBankAccountHolder] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [bankAccountNum, setBankAccountNum] = useState('');
-  const [bankConfirmAccountNum, setBankConfirmAccountNum] = useState('');
-  const [bankIfsc, setBankIfsc] = useState('');
-  const [bankBranch, setBankBranch] = useState('');
-  const [bankConfirmed, setBankConfirmed] = useState(false);
-
-  // Step 3: Success Summary Data
-  const [regSuccessData, setRegSuccessData] = useState<{
-    name: string;
-    maskedMobile: string;
-    maskedEmail: string;
-    maskedBank: string;
-    role: string;
-  } | null>(null);
-
   // Status & Feedback for Registration
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
@@ -130,13 +98,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialTab = 'login' }) =>
   // ---------------------------------------------------------------------------
   // TIMERS & EFFECTS
   // ---------------------------------------------------------------------------
-
-  // Sync bank account holder name with farmer full name by default
-  useEffect(() => {
-    if (!bankAccountHolder && regName) {
-      setBankAccountHolder(regName);
-    }
-  }, [regName]);
 
   // Login Cooldown countdown timers
   useEffect(() => {
@@ -173,11 +134,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialTab = 'login' }) =>
     const saved = localStorage.getItem('farmq_user');
     const u = saved ? JSON.parse(saved) : null;
     if (u?.role === 'admin' || u?.role === 'superadmin') {
-      navigate('/admin/dashboard');
+      navigate('/admin/dashboard', { replace: true });
     } else {
-      navigate('/farmer/dashboard');
+      navigate('/farmer/dashboard', { replace: true });
     }
   };
+
+  // If already authenticated, automatically steer to respective dashboard
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      handleRoleRedirect();
+    }
+  }, [isAuthenticated, user]);
 
   // Helper for generic 6-box OTP updates
   const handleOtpBoxChange = (
@@ -363,13 +331,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialTab = 'login' }) =>
   };
 
   // ---------------------------------------------------------------------------
-  // REGISTRATION ACTIONS (Direct 2-Step Flow)
+  // REGISTRATION ACTIONS (1. Personal & Location only)
   // ---------------------------------------------------------------------------
 
-  // Step 1: Validate Personal Information & Location -> Move to Step 2 (Bank Details)
-  const handleValidateRegStep1 = (e: React.FormEvent) => {
+  const handleRegisterFarmer = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError(null);
+
     if (!regName.trim()) {
       setRegError('Please enter your full name.');
       return;
@@ -405,55 +373,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialTab = 'login' }) =>
       return;
     }
 
-    // Advance directly to Step 2: Bank Details!
-    setRegStep(2);
-  };
-
-  // Step 2: Final Farmer Registration with Bank Details Validation
-  const handleCompleteRegistration = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setRegError(null);
-
-    // Bank Validations
-    const cleanAcc = bankAccountNum.replace(/\s+/g, '');
-    const cleanConfirm = bankConfirmAccountNum.replace(/\s+/g, '');
-
-    if (!cleanAcc || !/^\d{6,30}$/.test(cleanAcc)) {
-      setRegError('Please enter a valid numeric bank account number (6 to 30 digits).');
-      return;
-    }
-    if (cleanAcc !== cleanConfirm) {
-      setRegError('Bank Account Number and Confirm Account Number do not match.');
-      return;
-    }
-
-    const cleanIfsc = bankIfsc.trim().toUpperCase();
-    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(cleanIfsc)) {
-      setRegError('Invalid Indian IFSC Code format. Example: SBIN0001234 (4 letters, 0, 6 characters).');
-      return;
-    }
-
-    if (!bankName.trim()) {
-      setRegError('Please enter or select your bank name.');
-      return;
-    }
-
-    if (!bankBranch.trim()) {
-      setRegError('Please enter your bank branch name.');
-      return;
-    }
-
-    if (!bankConfirmed) {
-      setRegError('You must confirm that the bank details provided by you are correct.');
-      return;
-    }
-
     setRegLoading(true);
     try {
       const payload = {
         name: regName.trim(),
-        mobile: regMobile.replace(/\D/g, ''),
-        email: regEmail.trim().toLowerCase(),
+        mobile: cleanPhone,
+        email: cleanMail,
         password: regPassword,
         confirmPassword: regConfirmPassword,
         state: regState.trim(),
@@ -463,46 +388,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialTab = 'login' }) =>
         mainCrops: [],
         landArea: 1.0,
         landAreaUnit: 'acre',
-        preferredLanguage: 'en',
-        bankDetails: {
-          accountHolderName: bankAccountHolder.trim() || regName.trim(),
-          bankName: bankName.trim(),
-          accountNumber: cleanAcc,
-          confirmAccountNumber: cleanConfirm,
-          ifscCode: cleanIfsc,
-          branchName: bankBranch.trim(),
-          confirmed: true
-        }
+        preferredLanguage: 'en'
       };
 
-      const res = await api.post('/auth/farmer/register', payload);
-      const token = res.data.access_token;
-      const u = res.data.user;
+      // 1. Create and save the farmer account & 2. Authenticate the newly registered farmer
+      await registerFarmer(payload);
 
-      // Save token & user in localStorage for instant authentication
-      localStorage.setItem('farmq_token', token);
-      localStorage.setItem('farmq_user', JSON.stringify(u));
-
-      // Strictly Mask sensitive details (Never expose full bank account number)
-      const last4 = cleanAcc.slice(-4);
-      const maskedBank = `XXXX XXXX ${last4}`;
-      const rawMobile = regMobile.replace(/\D/g, '');
-      const maskedMobile = `+91 ${rawMobile.slice(0, 2)}******${rawMobile.slice(-2)}`;
-      const cleanMail = regEmail.trim().toLowerCase();
-      const mailParts = cleanMail.split('@');
-      const maskedEmail = mailParts[0].length > 2
-        ? `${mailParts[0][0]}***${mailParts[0].slice(-1)}@${mailParts[1]}`
-        : cleanMail;
-
-      setRegSuccessData({
-        name: u.name,
-        maskedMobile,
-        maskedEmail,
-        maskedBank,
-        role: u.role || 'farmer'
-      });
-
-      setRegStep(3);
+      // 3. Redirect directly to the Farmer Dashboard
+      navigate('/farmer/dashboard', { replace: true });
     } catch (err: any) {
       setRegError(err?.response?.data?.detail || 'Registration failed. Please verify your details and try again.');
     } finally {
@@ -1104,26 +997,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialTab = 'login' }) =>
               </div>
             </div>
 
-            {/* In-Card Step Indicator (2 Steps) */}
-            {regStep < 3 && (
-              <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200/80">
-                <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 mb-1.5">
-                  <span className={regStep >= 1 ? 'text-emerald-700 font-extrabold' : ''}>
-                    1. Personal Information & Location
-                  </span>
-                  <span className="text-slate-300">→</span>
-                  <span className={regStep >= 2 ? 'text-emerald-700 font-extrabold' : ''}>
-                    2. Bank Details
-                  </span>
-                </div>
-                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-emerald-600 to-teal-600 h-full transition-all duration-300 rounded-full"
-                    style={{ width: `${(regStep / 2) * 100}%` }}
-                  ></div>
-                </div>
+            {/* Flow Info Header */}
+            <div className="bg-emerald-50/60 rounded-2xl p-3 border border-emerald-200/80 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-950">
+                <UserCheck className="w-4 h-4 text-emerald-600" />
+                <span>Personal Information & Location</span>
               </div>
-            )}
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2.5 py-0.5 rounded-full">
+                Quick Registration
+              </span>
+            </div>
 
             {/* Registration Error Alert */}
             {regError && (
@@ -1134,211 +1017,153 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialTab = 'login' }) =>
             )}
 
             {/* ------------------------------------------------------------- */}
-            {/* STEP 1: PERSONAL INFORMATION & LOCATION ONLY                  */}
+            {/* 1. PERSONAL INFORMATION & LOCATION ONLY                       */}
             {/* ------------------------------------------------------------- */}
-            {regStep === 1 && (
-              <form onSubmit={handleValidateRegStep1} className="space-y-4">
-                {/* 1. Personal Information */}
-                <div className="space-y-3">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Personal Information</span>
-                  </h3>
+            <form onSubmit={handleRegisterFarmer} className="space-y-4">
+              {/* 1. Personal Information */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Personal Information</span>
+                </h3>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        Full Name *
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                          <User className="w-3.5 h-3.5" />
-                        </div>
-                        <input
-                          type="text"
-                          value={regName}
-                          onChange={(e) => setRegName(e.target.value)}
-                          placeholder="e.g. Balwant Singh"
-                          required
-                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        Mobile Number (+91) *
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-xs font-bold text-slate-500">
-                          +91
-                        </div>
-                        <input
-                          type="tel"
-                          value={regMobile}
-                          onChange={(e) => setRegMobile(e.target.value)}
-                          placeholder="98765 43210"
-                          maxLength={10}
-                          required
-                          className="w-full pl-11 pr-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="block text-[11px] font-bold text-slate-700">
-                      Email Address *
+                      Full Name *
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                        <Mail className="w-3.5 h-3.5" />
+                        <User className="w-3.5 h-3.5" />
                       </div>
                       <input
-                        type="email"
-                        value={regEmail}
-                        onChange={(e) => setRegEmail(e.target.value)}
-                        placeholder="balwant.farmer@example.com"
+                        type="text"
+                        value={regName}
+                        onChange={(e) => setRegName(e.target.value)}
+                        placeholder="e.g. Balwant Singh"
                         required
                         className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        Create Password *
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showRegPassword ? 'text' : 'password'}
-                          value={regPassword}
-                          onChange={(e) => setRegPassword(e.target.value)}
-                          placeholder="••••••••"
-                          required
-                          className="w-full px-3 py-2.5 pr-10 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowRegPassword(!showRegPassword)}
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 cursor-pointer"
-                        >
-                          {showRegPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        Confirm Password *
-                      </label>
-                      <input
-                        type={showRegPassword ? 'text' : 'password'}
-                        value={regConfirmPassword}
-                        onChange={(e) => setRegConfirmPassword(e.target.value)}
-                        placeholder="••••••••"
-                        required
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Location */}
-                <div className="space-y-3 pt-3 border-t border-slate-100">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Location</span>
-                  </h3>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        State *
-                      </label>
-                      <select
-                        value={regState}
-                        onChange={(e) => setRegState(e.target.value)}
-                        className="w-full px-2.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500 bg-white"
-                      >
-                        <option value="Haryana">Haryana</option>
-                        <option value="Punjab">Punjab</option>
-                        <option value="Uttar Pradesh">Uttar Pradesh</option>
-                        <option value="Rajasthan">Rajasthan</option>
-                        <option value="Madhya Pradesh">Madhya Pradesh</option>
-                        <option value="Gujarat">Gujarat</option>
-                        <option value="Maharashtra">Maharashtra</option>
-                        <option value="Bihar">Bihar</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        District *
-                      </label>
-                      <input
-                        type="text"
-                        value={regDistrict}
-                        onChange={(e) => setRegDistrict(e.target.value)}
-                        placeholder="e.g. Karnal"
-                        required
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        Village / City *
-                      </label>
-                      <input
-                        type="text"
-                        value={regVillage}
-                        onChange={(e) => setRegVillage(e.target.value)}
-                        placeholder="e.g. Taraori"
-                        required
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Next CTA to Step 2 */}
-                <button
-                  type="submit"
-                  className="w-full mt-3 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer group"
-                >
-                  <span>Proceed to Bank Details</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </button>
-              </form>
-            )}
-
-            {/* ------------------------------------------------------------- */}
-            {/* STEP 2: 🏦 BANK DETAILS VALIDATION                            */}
-            {/* ------------------------------------------------------------- */}
-            {regStep === 2 && (
-              <form onSubmit={handleCompleteRegistration} className="space-y-4 animate-fadeIn">
-                <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-200/80 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-950">
-                    <CreditCard className="w-4 h-4 text-emerald-600" />
-                    <span>Direct Mandi Payouts & DBT Account</span>
-                  </div>
-                  <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-700">
-                    <span>Step 2 of 2</span>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
                   <div className="space-y-1">
                     <label className="block text-[11px] font-bold text-slate-700">
-                      Account Holder Name *
+                      Mobile Number (+91) *
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-xs font-bold text-slate-500">
+                        +91
+                      </div>
+                      <input
+                        type="tel"
+                        value={regMobile}
+                        onChange={(e) => setRegMobile(e.target.value)}
+                        placeholder="98765 43210"
+                        maxLength={10}
+                        required
+                        className="w-full pl-11 pr-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-bold text-slate-700">
+                    Email Address *
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <Mail className="w-3.5 h-3.5" />
+                    </div>
+                    <input
+                      type="email"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      placeholder="balwant.farmer@example.com"
+                      required
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      Create Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showRegPassword ? 'text' : 'password'}
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        className="w-full px-3 py-2.5 pr-10 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowRegPassword(!showRegPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 cursor-pointer"
+                      >
+                        {showRegPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      Confirm Password *
+                    </label>
+                    <input
+                      type={showRegPassword ? 'text' : 'password'}
+                      value={regConfirmPassword}
+                      onChange={(e) => setRegConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Location */}
+              <div className="space-y-3 pt-3 border-t border-slate-100">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Location</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      State *
+                    </label>
+                    <select
+                      value={regState}
+                      onChange={(e) => setRegState(e.target.value)}
+                      className="w-full px-2.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500 bg-white"
+                    >
+                      <option value="Haryana">Haryana</option>
+                      <option value="Punjab">Punjab</option>
+                      <option value="Uttar Pradesh">Uttar Pradesh</option>
+                      <option value="Rajasthan">Rajasthan</option>
+                      <option value="Madhya Pradesh">Madhya Pradesh</option>
+                      <option value="Gujarat">Gujarat</option>
+                      <option value="Maharashtra">Maharashtra</option>
+                      <option value="Bihar">Bihar</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      District *
                     </label>
                     <input
                       type="text"
-                      value={bankAccountHolder}
-                      onChange={(e) => setBankAccountHolder(e.target.value)}
-                      placeholder="Name as printed on Bank Passbook"
+                      value={regDistrict}
+                      onChange={(e) => setRegDistrict(e.target.value)}
+                      placeholder="e.g. Karnal"
                       required
                       className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
                     />
@@ -1346,187 +1171,44 @@ export const LoginPage: React.FC<LoginPageProps> = ({ initialTab = 'login' }) =>
 
                   <div className="space-y-1">
                     <label className="block text-[11px] font-bold text-slate-700">
-                      Bank Name *
+                      Village / City *
                     </label>
                     <input
                       type="text"
-                      list="popularBanksList"
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                      placeholder="e.g. State Bank of India"
+                      value={regVillage}
+                      onChange={(e) => setRegVillage(e.target.value)}
+                      placeholder="e.g. Taraori"
                       required
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500 bg-white"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
                     />
-                    <datalist id="popularBanksList">
-                      {POPULAR_BANKS.map((b, i) => (
-                        <option key={i} value={b} />
-                      ))}
-                    </datalist>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        Account Number *
-                      </label>
-                      <input
-                        type="password"
-                        value={bankAccountNum}
-                        onChange={(e) => setBankAccountNum(e.target.value)}
-                        placeholder="••••••••••••"
-                        required
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-mono font-medium focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        Confirm Account Number *
-                      </label>
-                      <input
-                        type="text"
-                        value={bankConfirmAccountNum}
-                        onChange={(e) => setBankConfirmAccountNum(e.target.value)}
-                        placeholder="Re-enter Account Number"
-                        required
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-mono font-medium focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        IFSC Code *
-                      </label>
-                      <input
-                        type="text"
-                        value={bankIfsc}
-                        onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
-                        placeholder="SBIN0001234"
-                        maxLength={11}
-                        required
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        Branch Name *
-                      </label>
-                      <input
-                        type="text"
-                        value={bankBranch}
-                        onChange={(e) => setBankBranch(e.target.value)}
-                        placeholder="Taraori Mandi Branch"
-                        required
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Confirmation Checkbox */}
-                  <div className="pt-1">
-                    <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                      <input
-                        type="checkbox"
-                        checked={bankConfirmed}
-                        onChange={(e) => setBankConfirmed(e.target.checked)}
-                        className="mt-0.5 w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer shrink-0"
-                      />
-                      <span className="font-semibold">
-                        ☑ I confirm that the bank details provided by me are correct and in my name for mandi payouts.
-                      </span>
-                    </label>
                   </div>
                 </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setRegStep(1)}
-                    className="py-3 px-4 rounded-2xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer flex items-center gap-1"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    <span>Back</span>
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={regLoading || !bankConfirmed}
-                    className="flex-1 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {regLoading ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Validating & Registering...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" />
-                        <span>Complete Farmer Registration</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* ------------------------------------------------------------- */}
-            {/* STEP 3: REGISTRATION SUCCESSFUL & MASKED DETAILS              */}
-            {/* ------------------------------------------------------------- */}
-            {regStep === 3 && regSuccessData && (
-              <div className="space-y-6 text-center py-4 animate-fadeIn">
-                <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center mx-auto shadow-xl shadow-emerald-600/30 text-3xl">
-                  🎉
-                </div>
-
-                <div className="space-y-1">
-                  <h3 className="text-2xl font-black text-slate-900 font-heading">
-                    Farmer Account Created Successfully!
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Welcome to FarmQ, {regSuccessData.name}. Your farmer profile has been registered.
-                  </p>
-                </div>
-
-                {/* Masked Sensitive Summary Card */}
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-left space-y-2 text-xs">
-                  <div className="flex justify-between py-1 border-b border-slate-200">
-                    <span className="text-slate-500 font-medium">Assigned Role:</span>
-                    <span className="font-bold text-emerald-800 uppercase bg-emerald-100 px-2 py-0.5 rounded-full text-[10px]">
-                      {regSuccessData.role}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-200">
-                    <span className="text-slate-500 font-medium">Registered Mobile:</span>
-                    <span className="font-mono font-bold text-slate-800">{regSuccessData.maskedMobile}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-200">
-                    <span className="text-slate-500 font-medium">Registered Email:</span>
-                    <span className="font-mono font-bold text-slate-800">{regSuccessData.maskedEmail}</span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span className="text-slate-500 font-medium">Masked Payout Bank:</span>
-                    <span className="font-mono font-bold text-emerald-900">{regSuccessData.maskedBank}</span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => navigate('/farmer/dashboard')}
-                  className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer group"
-                >
-                  <span>Go to Farmer Dashboard</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
-                </button>
               </div>
-            )}
+
+              {/* Registration Submit CTA */}
+              <button
+                type="submit"
+                disabled={regLoading}
+                className="w-full mt-3 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {regLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Registering Farmer Account...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Complete Farmer Registration</span>
+                  </>
+                )}
+              </button>
+            </form>
 
             {/* Privacy & Safety Note */}
             <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 text-center">
               <ShieldCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-              <span>Full bank account numbers are permanently masked for your safety</span>
+              <span>Your farmer credentials & profile data are protected with 256-bit encryption</span>
             </div>
           </div>
 

@@ -15,6 +15,7 @@ interface AuthContextType {
   sendEmailOtp: (email: string) => Promise<{ success: boolean; message: string; email: string; demo_otp?: string }>;
   verifyEmailOtp: (email: string, otp: string, name?: string) => Promise<void>;
   register: (userData: any) => Promise<void>;
+  registerFarmer: (formData: any) => Promise<User>;
   requestPasswordReset: (email: string) => Promise<{ success: boolean; message: string; dev_token?: string }>;
   resetPassword: (token: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
@@ -62,6 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(userData);
     localStorage.setItem('farmq_token', access_token);
     localStorage.setItem('farmq_user', JSON.stringify(userData));
+    api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
   };
 
   const login = async (identifier: string, password: string) => {
@@ -110,6 +112,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveAuthSession(access_token, newUserData);
   };
 
+  const registerFarmer = async (formData: any) => {
+    const res = await api.post('/auth/farmer/register', formData);
+    const { access_token, user: newUserData } = res.data;
+    saveAuthSession(access_token, newUserData);
+    return newUserData;
+  };
+
   const requestPasswordReset = async (email: string) => {
     const res = await api.post('/auth/forgot-password', { email });
     return res.data;
@@ -125,6 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     localStorage.removeItem('farmq_token');
     localStorage.removeItem('farmq_user');
+    delete api.defaults.headers.common['Authorization'];
   };
 
   const updateUser = (updatedData: Partial<User>) => {
@@ -159,6 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sendEmailOtp,
       verifyEmailOtp,
       register,
+      registerFarmer,
       requestPasswordReset,
       resetPassword,
       logout,

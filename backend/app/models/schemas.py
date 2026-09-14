@@ -371,7 +371,7 @@ class FarmerRegistrationRequest(BaseModel):
     landAreaUnit: Optional[str] = "acre"
     farmingExperience: Optional[float] = 5.0
     farmLocation: Optional[str] = None
-    bankDetails: FarmerBankDetailsInput
+    bankDetails: Optional[FarmerBankDetailsInput] = None
 
 class FarmerSendOtpRequest(BaseModel):
     channel: str = Field(..., description="'mobile' or 'email'")
