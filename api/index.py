@@ -9,5 +9,6 @@ if root_dir not in sys.path:
 # Import the FastAPI application
 from backend.app.main import app
 
-# Export for Vercel Serverless Function (ASGI handler)
+# Export for Vercel Serverless Function (both app and handler)
+app = app
 handler = app
