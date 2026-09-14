@@ -4,67 +4,171 @@ import {
   Sprout,
   Mail,
   Lock,
-  AlertCircle,
-  ArrowRight,
+  Phone,
+  User,
+  MapPin,
   ShieldCheck,
   CheckCircle2,
+  AlertCircle,
+  ArrowRight,
+  ArrowLeft,
   RefreshCw,
   Edit2,
   Clock,
   Sparkles,
   Zap,
   Building,
-  UserCheck
+  UserCheck,
+  Eye,
+  EyeOff,
+  CreditCard,
+  Check
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import api from '../../services/api';
 
-export const LoginPage: React.FC = () => {
-  const { sendEmailOtp, verifyEmailOtp } = useAuth();
+const POPULAR_BANKS = [
+  'State Bank of India (SBI)',
+  'Punjab National Bank (PNB)',
+  'HDFC Bank',
+  'Bank of Baroda',
+  'Canara Bank',
+  'ICICI Bank',
+  'Union Bank of India',
+  'Central Bank of India'
+];
+
+interface LoginPageProps {
+  initialTab?: 'login' | 'register';
+}
+
+export const LoginPage: React.FC<LoginPageProps> = ({ initialTab = 'login' }) => {
+  const {
+    sendOtp,
+    verifyOtp,
+    sendEmailOtp,
+    verifyEmailOtp,
+    loginWithGoogle,
+    loginAsDemo
+  } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
 
-  // Multi-step flow: 'email' -> 'verify'
-  const [step, setStep] = useState<'email' | 'verify'>('email');
+  // Mobile/Tablet switcher tab: 'login' | 'register' (Desktop displays both side-by-side)
+  const [activeMobileTab, setActiveMobileTab] = useState<'login' | 'register'>(initialTab);
 
-  // Form states
-  const [email, setEmail] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
-  const [cooldown, setCooldown] = useState(0);
-  const [demoOtp, setDemoOtp] = useState<string | null>(null);
+  // ---------------------------------------------------------------------------
+  // LEFT COLUMN: LOGIN STATES (Mobile OTP & Email OTP only)
+  // ---------------------------------------------------------------------------
+  const [loginMode, setLoginMode] = useState<'mobile_otp' | 'email_otp'>('mobile_otp');
 
-  // Status & Feedback
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  // Mobile OTP login states
+  const [loginPhone, setLoginPhone] = useState('');
+  const [phoneOtpStep, setPhoneOtpStep] = useState<'input' | 'verify'>('input');
+  const [phoneOtp, setPhoneOtp] = useState<string[]>(['', '', '', '', '', '']);
+  const [phoneCooldown, setPhoneCooldown] = useState(0);
 
-  // Ref for OTP inputs
-  const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
+  // Email OTP login states
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginEmailName, setLoginEmailName] = useState('');
+  const [emailOtpStep, setEmailOtpStep] = useState<'input' | 'verify'>('input');
+  const [emailOtp, setEmailOtp] = useState<string[]>(['', '', '', '', '', '']);
+  const [emailCooldown, setEmailCooldown] = useState(0);
 
-  // Cooldown countdown timer
+  // Status & Feedback for Login
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginSuccess, setLoginSuccess] = useState<string | null>(null);
+
+  // Refs for OTP input boxes
+  const phoneOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const emailOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // ---------------------------------------------------------------------------
+  // RIGHT COLUMN: REGISTRATION STATES (2-Step Flow: 1. Personal & Location -> 2. Bank Details)
+  // ---------------------------------------------------------------------------
+  // 1: Personal & Location Details
+  // 2: Bank Details Validation
+  // 3: Registration Success
+  const [regStep, setRegStep] = useState<number>(1);
+
+  // Step 1: Personal Information & Location Details
+  const [regName, setRegName] = useState('');
+  const [regMobile, setRegMobile] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+
+  const [regState, setRegState] = useState('Haryana');
+  const [regDistrict, setRegDistrict] = useState('Karnal');
+  const [regVillage, setRegVillage] = useState('Taraori');
+
+  // Step 2: Bank Details
+  const [bankAccountHolder, setBankAccountHolder] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [bankAccountNum, setBankAccountNum] = useState('');
+  const [bankConfirmAccountNum, setBankConfirmAccountNum] = useState('');
+  const [bankIfsc, setBankIfsc] = useState('');
+  const [bankBranch, setBankBranch] = useState('');
+  const [bankConfirmed, setBankConfirmed] = useState(false);
+
+  // Step 3: Success Summary Data
+  const [regSuccessData, setRegSuccessData] = useState<{
+    name: string;
+    maskedMobile: string;
+    maskedEmail: string;
+    maskedBank: string;
+    role: string;
+  } | null>(null);
+
+  // Status & Feedback for Registration
+  const [regLoading, setRegLoading] = useState(false);
+  const [regError, setRegError] = useState<string | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // TIMERS & EFFECTS
+  // ---------------------------------------------------------------------------
+
+  // Sync bank account holder name with farmer full name by default
   useEffect(() => {
-    let timer: ReturnType<typeof setInterval>;
-    if (cooldown > 0) {
-      timer = setInterval(() => {
-        setCooldown((prev) => prev - 1);
-      }, 1000);
+    if (!bankAccountHolder && regName) {
+      setBankAccountHolder(regName);
     }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [cooldown]);
+  }, [regName]);
 
-  // Focus first OTP input when moving to verify step
+  // Login Cooldown countdown timers
   useEffect(() => {
-    if (step === 'verify') {
-      setTimeout(() => {
-        otpInputsRef.current[0]?.focus();
-      }, 100);
+    let t: any;
+    if (phoneCooldown > 0) {
+      t = setInterval(() => setPhoneCooldown((p) => p - 1), 1000);
     }
-  }, [step]);
+    return () => clearInterval(t);
+  }, [phoneCooldown]);
 
-  // Redirect based on user role
+  useEffect(() => {
+    let t: any;
+    if (emailCooldown > 0) {
+      t = setInterval(() => setEmailCooldown((p) => p - 1), 1000);
+    }
+    return () => clearInterval(t);
+  }, [emailCooldown]);
+
+  // Auto focus first OTP input on login step activation
+  useEffect(() => {
+    if (phoneOtpStep === 'verify') {
+      setTimeout(() => phoneOtpRefs.current[0]?.focus(), 120);
+    }
+  }, [phoneOtpStep]);
+
+  useEffect(() => {
+    if (emailOtpStep === 'verify') {
+      setTimeout(() => emailOtpRefs.current[0]?.focus(), 120);
+    }
+  }, [emailOtpStep]);
+
+  // Role Redirect Helper
   const handleRoleRedirect = () => {
     const saved = localStorage.getItem('farmq_user');
     const u = saved ? JSON.parse(saved) : null;
@@ -75,454 +179,1372 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  // 1. Send OTP to Email
-  const handleSendOtp = async (targetEmail?: string) => {
-    const emailToUse = (targetEmail || email).trim().toLowerCase();
-    if (!emailToUse || !emailToUse.includes('@') || !emailToUse.includes('.')) {
-      setError('Please enter a valid email address (e.g. name@example.com).');
-      return;
-    }
-
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await sendEmailOtp(emailToUse);
-      setEmail(emailToUse);
-      setSuccessMsg(res.message || `Verification code sent to ${emailToUse}`);
-      if (res.demo_otp) {
-        setDemoOtp(res.demo_otp);
-      }
-      setCooldown(30);
-      setOtp(['', '', '', '', '', '']);
-      setStep('verify');
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail;
-      setError(detail || 'Failed to send OTP. Please check your email and try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 2. Handle OTP input change
-  const handleOtpBoxChange = (index: number, value: string) => {
+  // Helper for generic 6-box OTP updates
+  const handleOtpBoxChange = (
+    index: number,
+    value: string,
+    stateArr: string[],
+    setArr: React.Dispatch<React.SetStateAction<string[]>>,
+    refs: React.MutableRefObject<(HTMLInputElement | null)[]>
+  ) => {
     const cleaned = value.replace(/\D/g, '');
     if (!cleaned) {
-      const updated = [...otp];
+      const updated = [...stateArr];
       updated[index] = '';
-      setOtp(updated);
+      setArr(updated);
       return;
     }
     const digit = cleaned[cleaned.length - 1];
-    const updated = [...otp];
+    const updated = [...stateArr];
     updated[index] = digit;
-    setOtp(updated);
-    if (error) setError(null);
+    setArr(updated);
 
-    // Auto-focus next box
     if (index < 5) {
-      otpInputsRef.current[index + 1]?.focus();
+      refs.current[index + 1]?.focus();
     }
   };
 
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace') {
-      if (!otp[index] && index > 0) {
-        otpInputsRef.current[index - 1]?.focus();
-      }
+  const handleOtpKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>,
+    stateArr: string[],
+    refs: React.MutableRefObject<(HTMLInputElement | null)[]>
+  ) => {
+    if (e.key === 'Backspace' && !stateArr[index] && index > 0) {
+      refs.current[index - 1]?.focus();
     } else if (e.key === 'ArrowLeft' && index > 0) {
-      otpInputsRef.current[index - 1]?.focus();
+      refs.current[index - 1]?.focus();
     } else if (e.key === 'ArrowRight' && index < 5) {
-      otpInputsRef.current[index + 1]?.focus();
+      refs.current[index + 1]?.focus();
     }
   };
 
-  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+  const handleOtpPaste = (
+    e: React.ClipboardEvent<HTMLInputElement>,
+    setArr: React.Dispatch<React.SetStateAction<string[]>>,
+    refs: React.MutableRefObject<(HTMLInputElement | null)[]>
+  ) => {
     e.preventDefault();
-    const pasteData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (pasteData) {
+    const paste = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (paste) {
       const updated = ['', '', '', '', '', ''];
-      for (let i = 0; i < pasteData.length; i++) {
-        updated[i] = pasteData[i];
+      for (let i = 0; i < paste.length; i++) {
+        updated[i] = paste[i];
       }
-      setOtp(updated);
-      const nextIndex = Math.min(pasteData.length, 5);
-      otpInputsRef.current[nextIndex]?.focus();
+      setArr(updated);
+      const nextIdx = Math.min(paste.length, 5);
+      refs.current[nextIdx]?.focus();
     }
   };
 
-  // 3. Verify OTP & Log In
-  const handleVerifyOtp = async (e?: React.FormEvent) => {
+  // ---------------------------------------------------------------------------
+  // LOGIN ACTIONS (Mobile OTP, Email OTP, Google Login)
+  // ---------------------------------------------------------------------------
+
+  // 1. Mobile OTP Login
+  const handleSendPhoneOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const fullOtp = otp.join('');
-    if (fullOtp.length !== 6) {
-      setError('Please enter all 6 digits of the OTP verification code.');
+    const clean = loginPhone.replace(/\D/g, '');
+    if (clean.length !== 10) {
+      setLoginError('Please enter a valid 10-digit Indian mobile number.');
       return;
     }
 
-    setError(null);
-    setLoading(true);
+    setLoginError(null);
+    setLoginSuccess(null);
+    setLoginLoading(true);
     try {
-      await verifyEmailOtp(email.trim().toLowerCase(), fullOtp, fullName.trim() || undefined);
+      const res = await sendOtp(clean);
+      setPhoneOtpStep('verify');
+      setPhoneCooldown(30);
+      setPhoneOtp(['', '', '', '', '', '']);
+      setLoginSuccess(res.message || `OTP dispatched to +91 ${clean.slice(0, 2)}******${clean.slice(-2)}`);
+    } catch (err: any) {
+      setLoginError(err?.response?.data?.detail || 'Failed to send OTP. Please check mobile number.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const code = phoneOtp.join('');
+    if (code.length !== 6) {
+      setLoginError('Please enter all 6 digits of the OTP verification code.');
+      return;
+    }
+
+    setLoginError(null);
+    setLoginLoading(true);
+    try {
+      const clean = loginPhone.replace(/\D/g, '');
+      await verifyOtp(clean, code);
       handleRoleRedirect();
     } catch (err: any) {
-      const detail = err?.response?.data?.detail;
-      setError(detail || 'Invalid or expired OTP. Please verify the code or request a new one.');
+      setLoginError(err?.response?.data?.detail || 'Invalid or expired OTP. Please try again.');
     } finally {
-      setLoading(false);
+      setLoginLoading(false);
     }
   };
 
-  // Quick auto-fill demo OTP
-  const handleAutoFillDemoOtp = () => {
-    if (demoOtp && demoOtp.length === 6) {
-      setOtp(demoOtp.split(''));
-      setError(null);
+  // 2. Email OTP Login
+  const handleSendEmailOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanMail = loginEmail.trim().toLowerCase();
+    if (!cleanMail || !cleanMail.includes('@') || !cleanMail.includes('.')) {
+      setLoginError('Please enter a valid email address (e.g. name@example.com).');
+      return;
+    }
+
+    setLoginError(null);
+    setLoginSuccess(null);
+    setLoginLoading(true);
+    try {
+      const res = await sendEmailOtp(cleanMail);
+      setEmailOtpStep('verify');
+      setEmailCooldown(30);
+      setEmailOtp(['', '', '', '', '', '']);
+      setLoginSuccess(res.message || `Verification code sent to ${cleanMail}`);
+    } catch (err: any) {
+      setLoginError(err?.response?.data?.detail || 'Failed to send code. Please try again.');
+    } finally {
+      setLoginLoading(false);
     }
   };
 
-  // Quick Demo Account Selection
-  const handleSelectDemoEmail = (demoEmail: string, demoName: string) => {
-    setEmail(demoEmail);
-    setFullName(demoName);
-    setError(null);
-    setSuccessMsg(null);
-    handleSendOtp(demoEmail);
+  const handleVerifyEmailOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const code = emailOtp.join('');
+    if (code.length !== 6) {
+      setLoginError('Please enter all 6 digits of the verification code.');
+      return;
+    }
+
+    setLoginError(null);
+    setLoginLoading(true);
+    try {
+      const cleanMail = loginEmail.trim().toLowerCase();
+      await verifyEmailOtp(cleanMail, code, loginEmailName.trim() || undefined);
+      handleRoleRedirect();
+    } catch (err: any) {
+      setLoginError(err?.response?.data?.detail || 'Invalid or expired verification code.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // 3. Google Login
+  const handleGoogleLogin = async () => {
+    setLoginError(null);
+    setLoginLoading(true);
+    try {
+      const mockGoogleCredential = `mock_google_token_${Date.now()}`;
+      await loginWithGoogle(mockGoogleCredential);
+      handleRoleRedirect();
+    } catch (err: any) {
+      setLoginError(err?.response?.data?.detail || 'Google sign in encountered an issue. Please try again.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // 4. 1-Click Fast Demo Login
+  const handleQuickDemoLogin = async (role: 'farmer' | 'admin' | 'superadmin') => {
+    setLoginError(null);
+    setLoginLoading(true);
+    try {
+      await loginAsDemo(role);
+      handleRoleRedirect();
+    } catch (err: any) {
+      setLoginError(err?.response?.data?.detail || `Failed to sign in as ${role}`);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // REGISTRATION ACTIONS (Direct 2-Step Flow)
+  // ---------------------------------------------------------------------------
+
+  // Step 1: Validate Personal Information & Location -> Move to Step 2 (Bank Details)
+  const handleValidateRegStep1 = (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError(null);
+    if (!regName.trim()) {
+      setRegError('Please enter your full name.');
+      return;
+    }
+    const cleanPhone = regMobile.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      setRegError('Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+    const cleanMail = regEmail.trim().toLowerCase();
+    if (!cleanMail || !cleanMail.includes('@') || !cleanMail.includes('.')) {
+      setRegError('Please enter a valid email address.');
+      return;
+    }
+    if (regPassword.length < 4) {
+      setRegError('Password must be at least 4 characters long.');
+      return;
+    }
+    if (regPassword !== regConfirmPassword) {
+      setRegError('Passwords do not match.');
+      return;
+    }
+    if (!regState.trim()) {
+      setRegError('Please select or enter your state.');
+      return;
+    }
+    if (!regDistrict.trim()) {
+      setRegError('Please enter your district.');
+      return;
+    }
+    if (!regVillage.trim()) {
+      setRegError('Please enter your village or city.');
+      return;
+    }
+
+    // Advance directly to Step 2: Bank Details!
+    setRegStep(2);
+  };
+
+  // Step 2: Final Farmer Registration with Bank Details Validation
+  const handleCompleteRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError(null);
+
+    // Bank Validations
+    const cleanAcc = bankAccountNum.replace(/\s+/g, '');
+    const cleanConfirm = bankConfirmAccountNum.replace(/\s+/g, '');
+
+    if (!cleanAcc || !/^\d{6,30}$/.test(cleanAcc)) {
+      setRegError('Please enter a valid numeric bank account number (6 to 30 digits).');
+      return;
+    }
+    if (cleanAcc !== cleanConfirm) {
+      setRegError('Bank Account Number and Confirm Account Number do not match.');
+      return;
+    }
+
+    const cleanIfsc = bankIfsc.trim().toUpperCase();
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(cleanIfsc)) {
+      setRegError('Invalid Indian IFSC Code format. Example: SBIN0001234 (4 letters, 0, 6 characters).');
+      return;
+    }
+
+    if (!bankName.trim()) {
+      setRegError('Please enter or select your bank name.');
+      return;
+    }
+
+    if (!bankBranch.trim()) {
+      setRegError('Please enter your bank branch name.');
+      return;
+    }
+
+    if (!bankConfirmed) {
+      setRegError('You must confirm that the bank details provided by you are correct.');
+      return;
+    }
+
+    setRegLoading(true);
+    try {
+      const payload = {
+        name: regName.trim(),
+        mobile: regMobile.replace(/\D/g, ''),
+        email: regEmail.trim().toLowerCase(),
+        password: regPassword,
+        confirmPassword: regConfirmPassword,
+        state: regState.trim(),
+        district: regDistrict.trim(),
+        village: regVillage.trim(),
+        farmerType: 'Small',
+        mainCrops: [],
+        landArea: 1.0,
+        landAreaUnit: 'acre',
+        preferredLanguage: 'en',
+        bankDetails: {
+          accountHolderName: bankAccountHolder.trim() || regName.trim(),
+          bankName: bankName.trim(),
+          accountNumber: cleanAcc,
+          confirmAccountNumber: cleanConfirm,
+          ifscCode: cleanIfsc,
+          branchName: bankBranch.trim(),
+          confirmed: true
+        }
+      };
+
+      const res = await api.post('/auth/farmer/register', payload);
+      const token = res.data.access_token;
+      const u = res.data.user;
+
+      // Save token & user in localStorage for instant authentication
+      localStorage.setItem('farmq_token', token);
+      localStorage.setItem('farmq_user', JSON.stringify(u));
+
+      // Strictly Mask sensitive details (Never expose full bank account number)
+      const last4 = cleanAcc.slice(-4);
+      const maskedBank = `XXXX XXXX ${last4}`;
+      const rawMobile = regMobile.replace(/\D/g, '');
+      const maskedMobile = `+91 ${rawMobile.slice(0, 2)}******${rawMobile.slice(-2)}`;
+      const cleanMail = regEmail.trim().toLowerCase();
+      const mailParts = cleanMail.split('@');
+      const maskedEmail = mailParts[0].length > 2
+        ? `${mailParts[0][0]}***${mailParts[0].slice(-1)}@${mailParts[1]}`
+        : cleanMail;
+
+      setRegSuccessData({
+        name: u.name,
+        maskedMobile,
+        maskedEmail,
+        maskedBank,
+        role: u.role || 'farmer'
+      });
+
+      setRegStep(3);
+    } catch (err: any) {
+      setRegError(err?.response?.data?.detail || 'Registration failed. Please verify your details and try again.');
+    } finally {
+      setRegLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-[85vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-6">
-        {/* FarmQ Brand Header */}
-        <div className="text-center">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-xl shadow-emerald-600/25">
+    <div className="min-h-[92vh] bg-gradient-to-br from-slate-50 via-emerald-50/20 to-teal-50/30 py-8 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center">
+      <div className="w-full max-w-7xl mx-auto space-y-6">
+
+        {/* ================================================================= */}
+        {/* BRAND PLATFORM HEADER                                             */}
+        {/* ================================================================= */}
+        <div className="text-center max-w-2xl mx-auto space-y-2">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-xl shadow-emerald-600/25 mb-1 hover:scale-105 transition-transform">
             <Sprout className="w-8 h-8" />
           </div>
-          <h2 className="mt-4 text-3xl font-black text-slate-900 font-heading tracking-tight">
-            Sign In to Farm<span className="text-emerald-600">Q</span>
-          </h2>
-          <p className="mt-1.5 text-xs text-slate-500 max-w-xs mx-auto">
-            Secure, password-free login via Email One-Time Password (OTP).
+          <h1 className="text-3xl sm:text-4xl font-black text-slate-900 font-heading tracking-tight">
+            Farm<span className="text-emerald-600">Q</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium">
+            Smart Procurement • Less Waiting • Better Farming
           </p>
         </div>
 
-        {/* 1-Click Fast Demo Logins */}
-        <div className="bg-gradient-to-r from-emerald-50 via-teal-50/50 to-slate-50 rounded-2xl p-4 border border-emerald-200/80 shadow-xs space-y-2.5">
-          <div className="flex items-center justify-between text-xs font-bold text-emerald-950 uppercase tracking-wider">
-            <div className="flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
-              <span>1-Click Fast Testing Accounts:</span>
-            </div>
-            <span className="text-[10px] text-emerald-700 font-medium normal-case">Demo Mode</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleSelectDemoEmail('farmer@farmq.demo', 'Surjeet Kumar')}
-              disabled={loading}
-              className="p-2.5 bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-900 border border-slate-200 hover:border-emerald-300 rounded-xl text-xs font-bold shadow-xs transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer disabled:opacity-50 text-center"
-            >
-              <span className="flex items-center gap-1">🌾 Farmer Login</span>
-              <span className="text-[10px] text-slate-500 font-normal">farmer@farmq.demo</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSelectDemoEmail('admin@farmq.demo', 'Vikram Singh')}
-              disabled={loading}
-              className="p-2.5 bg-white hover:bg-slate-50 text-slate-800 hover:text-slate-900 border border-slate-200 hover:border-slate-400 rounded-xl text-xs font-bold shadow-xs transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer disabled:opacity-50 text-center"
-            >
-              <span className="flex items-center gap-1">🏢 Mandi Admin</span>
-              <span className="text-[10px] text-slate-500 font-normal">admin@farmq.demo</span>
-            </button>
-          </div>
-
-          <div className="text-center pt-0.5">
-            <button
-              type="button"
-              onClick={() => handleSelectDemoEmail('superadmin@farmq.demo', 'Director Admin')}
-              disabled={loading}
-              className="text-[11px] text-emerald-700 hover:text-emerald-900 hover:underline font-semibold cursor-pointer inline-flex items-center gap-1"
-            >
-              <Building className="w-3 h-3" />
-              <span>or test as Super Admin (superadmin@farmq.demo)</span>
-            </button>
-          </div>
+        {/* ================================================================= */}
+        {/* MOBILE / TABLET RESPONSIVE SEGMENTED TAB SWITCHER (< lg)          */}
+        {/* ================================================================= */}
+        <div className="lg:hidden flex items-center justify-center p-1.5 bg-slate-200/80 rounded-2xl max-w-md mx-auto w-full shadow-inner">
+          <button
+            type="button"
+            onClick={() => setActiveMobileTab('login')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeMobileTab === 'login'
+                ? 'bg-white text-slate-900 shadow-md ring-1 ring-slate-900/5'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Lock className="w-3.5 h-3.5 text-emerald-600" />
+            <span>🔐 Sign In / Login</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveMobileTab('register')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeMobileTab === 'register'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Sprout className="w-3.5 h-3.5" />
+            <span>🌾 Register as Farmer</span>
+          </button>
         </div>
 
-        {/* Main Card */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xl space-y-6">
-          {/* Active Step Indicator */}
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${
-                step === 'email' ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800'
-              }`}>
-                1
+        {/* ================================================================= */}
+        {/* MAIN TWO-COLUMN CONTAINER: SIDE-BY-SIDE ON DESKTOP                */}
+        {/* ================================================================= */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+          {/* =============================================================== */}
+          {/* LEFT COLUMN: 🔐 WELCOME BACK (LOGIN CARD)                       */}
+          {/* =============================================================== */}
+          <div
+            className={`lg:col-span-5 bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-xl space-y-6 relative transition-all ${
+              activeMobileTab === 'login' ? 'block' : 'hidden lg:block'
+            }`}
+          >
+            {/* Header with "Already have an account?" badge */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 mb-1.5">
+                  <span>Already have an account?</span>
+                </div>
+                <h2 className="text-2xl font-black text-slate-900 font-heading tracking-tight flex items-center gap-2">
+                  <span>Welcome Back</span>
+                  <span className="text-xl">👋</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Login to your FarmQ account
+                </p>
               </div>
-              <span className={`text-xs font-bold ${step === 'email' ? 'text-slate-900' : 'text-slate-400'}`}>
-                Enter Email
-              </span>
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                <Lock className="w-5 h-5" />
+              </div>
             </div>
-            <div className="w-8 h-px bg-slate-200" />
-            <div className="flex items-center gap-2">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${
-                step === 'verify' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'
-              }`}>
-                2
+
+            {/* Login Error Alert */}
+            {loginError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5 animate-fadeIn">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                <div className="flex-1 font-semibold">{loginError}</div>
               </div>
-              <span className={`text-xs font-bold ${step === 'verify' ? 'text-slate-900' : 'text-slate-400'}`}>
-                Verify Code
-              </span>
+            )}
+
+            {/* Login Success Alert */}
+            {loginSuccess && !loginError && (
+              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 animate-fadeIn">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                <span className="font-semibold">{loginSuccess}</span>
+              </div>
+            )}
+
+            {/* ------------------------------------------------------------- */}
+            {/* LOGIN METHOD SELECTOR TABS (Mobile OTP vs Email OTP)          */}
+            {/* ------------------------------------------------------------- */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-2xl border border-slate-200 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginMode('mobile_otp');
+                    setLoginError(null);
+                    setLoginSuccess(null);
+                  }}
+                  className={`py-2.5 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    loginMode === 'mobile_otp'
+                      ? 'bg-white text-emerald-800 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>📱 Mobile OTP</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginMode('email_otp');
+                    setLoginError(null);
+                    setLoginSuccess(null);
+                  }}
+                  className={`py-2.5 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    loginMode === 'email_otp'
+                      ? 'bg-white text-emerald-800 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>📧 Email OTP</span>
+                </button>
+              </div>
+
+              {/* 1. MOBILE OTP FORM */}
+              {loginMode === 'mobile_otp' && (
+                <div className="space-y-4 pt-1">
+                  {phoneOtpStep === 'input' ? (
+                    <form onSubmit={handleSendPhoneOtp} className="space-y-3.5">
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-bold text-slate-700">
+                          Registered Mobile Number
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-xs font-bold text-slate-500">
+                            +91
+                          </div>
+                          <input
+                            type="tel"
+                            value={loginPhone}
+                            onChange={(e) => {
+                              setLoginPhone(e.target.value);
+                              if (loginError) setLoginError(null);
+                            }}
+                            placeholder="98765 43210"
+                            maxLength={14}
+                            autoFocus
+                            required
+                            className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-sm transition-all"
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          We will send a 6-digit secure login OTP to your mobile phone.
+                        </p>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={loginLoading || !loginPhone.trim()}
+                        className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {loginLoading ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Sending Secure OTP...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Send Mobile OTP</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-4 h-4 text-emerald-600" />
+                          <div className="text-xs font-bold text-slate-800">
+                            +91 {loginPhone.replace(/\D/g, '')}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPhoneOtpStep('input');
+                            setLoginError(null);
+                          }}
+                          className="text-xs text-emerald-700 hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          <span>Change</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-center text-xs font-bold text-slate-700">
+                          Enter the 6-digit code received on your phone
+                        </label>
+                        <div className="flex justify-between gap-1.5 sm:gap-2">
+                          {phoneOtp.map((digit, idx) => (
+                            <input
+                              key={idx}
+                              ref={(el) => {
+                                phoneOtpRefs.current[idx] = el;
+                              }}
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={1}
+                              value={digit}
+                              onChange={(e) =>
+                                handleOtpBoxChange(
+                                  idx,
+                                  e.target.value,
+                                  phoneOtp,
+                                  setPhoneOtp,
+                                  phoneOtpRefs
+                                )
+                              }
+                              onKeyDown={(e) =>
+                                handleOtpKeyDown(idx, e, phoneOtp, phoneOtpRefs)
+                              }
+                              onPaste={(e) =>
+                                handleOtpPaste(e, setPhoneOtp, phoneOtpRefs)
+                              }
+                              className={`w-10 h-12 sm:w-11 sm:h-13 text-center text-xl font-black rounded-xl border transition-all ${
+                                digit
+                                  ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 ring-2 ring-emerald-500/20 shadow-xs'
+                                  : 'border-slate-300 bg-white text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleVerifyPhoneOtp()}
+                        disabled={loginLoading || phoneOtp.join('').length !== 6}
+                        className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {loginLoading ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Verifying OTP & Logging In...</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="w-4 h-4" />
+                            <span>Verify & Login</span>
+                          </>
+                        )}
+                      </button>
+
+                      <div className="text-center text-xs text-slate-500">
+                        {phoneCooldown > 0 ? (
+                          <div className="flex items-center justify-center gap-1.5 text-slate-400">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Resend OTP in {phoneCooldown}s</span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleSendPhoneOtp()}
+                            disabled={loginLoading}
+                            className="text-emerald-600 hover:text-emerald-700 font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>Didn't receive code? Resend SMS</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 2. EMAIL OTP FORM */}
+              {loginMode === 'email_otp' && (
+                <div className="space-y-4 pt-1">
+                  {emailOtpStep === 'input' ? (
+                    <form onSubmit={handleSendEmailOtp} className="space-y-3.5">
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-bold text-slate-700">
+                          Email Address
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                            <Mail className="w-4 h-4" />
+                          </div>
+                          <input
+                            type="email"
+                            value={loginEmail}
+                            onChange={(e) => {
+                              setLoginEmail(e.target.value);
+                              if (loginError) setLoginError(null);
+                            }}
+                            placeholder="farmer@example.com"
+                            autoFocus
+                            required
+                            className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-sm transition-all"
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          We'll send a 6-digit secure login code to your email.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-500">
+                          Full Name <span className="text-[10px] text-slate-400">(Optional for new farmers)</span>
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                            <UserCheck className="w-4 h-4" />
+                          </div>
+                          <input
+                            type="text"
+                            value={loginEmailName}
+                            onChange={(e) => setLoginEmailName(e.target.value)}
+                            placeholder="e.g. Surjeet Kumar"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-slate-200 text-sm font-medium"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={loginLoading || !loginEmail.trim()}
+                        className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {loginLoading ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Sending Code to Email...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Send Verification Code</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-emerald-600" />
+                          <div className="text-xs font-bold text-slate-800 truncate max-w-[200px]">
+                            {loginEmail}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmailOtpStep('input');
+                            setLoginError(null);
+                          }}
+                          className="text-xs text-emerald-700 hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          <span>Change</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-center text-xs font-bold text-slate-700">
+                          Enter the 6-digit code received on your email
+                        </label>
+                        <div className="flex justify-between gap-1.5 sm:gap-2">
+                          {emailOtp.map((digit, idx) => (
+                            <input
+                              key={idx}
+                              ref={(el) => {
+                                emailOtpRefs.current[idx] = el;
+                              }}
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={1}
+                              value={digit}
+                              onChange={(e) =>
+                                handleOtpBoxChange(
+                                  idx,
+                                  e.target.value,
+                                  emailOtp,
+                                  setEmailOtp,
+                                  emailOtpRefs
+                                )
+                              }
+                              onKeyDown={(e) =>
+                                handleOtpKeyDown(idx, e, emailOtp, emailOtpRefs)
+                              }
+                              onPaste={(e) =>
+                                handleOtpPaste(e, setEmailOtp, emailOtpRefs)
+                              }
+                              className={`w-10 h-12 sm:w-11 sm:h-13 text-center text-xl font-black rounded-xl border transition-all ${
+                                digit
+                                  ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 ring-2 ring-emerald-500/20 shadow-xs'
+                                  : 'border-slate-300 bg-white text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleVerifyEmailOtp()}
+                        disabled={loginLoading || emailOtp.join('').length !== 6}
+                        className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {loginLoading ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Verifying Code & Logging In...</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="w-4 h-4" />
+                            <span>Verify & Login</span>
+                          </>
+                        )}
+                      </button>
+
+                      <div className="text-center text-xs text-slate-500">
+                        {emailCooldown > 0 ? (
+                          <div className="flex items-center justify-center gap-1.5 text-slate-400">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Resend code in {emailCooldown}s</span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleSendEmailOtp()}
+                            disabled={loginLoading}
+                            className="text-emerald-600 hover:text-emerald-700 font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>Didn't receive code? Resend Email</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ----------------------------------------------------------- */}
+              {/* GOOGLE LOGIN BUTTON                                         */}
+              {/* ----------------------------------------------------------- */}
+              <div className="pt-2">
+                <div className="relative flex py-2 items-center">
+                  <div className="flex-grow border-t border-slate-200"></div>
+                  <span className="flex-shrink mx-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    Or
+                  </span>
+                  <div className="flex-grow border-t border-slate-200"></div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={loginLoading}
+                  className="w-full py-3 px-4 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-2xl border border-slate-300 shadow-xs transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                  <span>Continue with Google</span>
+                </button>
+              </div>
+
+              {/* ----------------------------------------------------------- */}
+              {/* 1-CLICK FAST TEST ACCOUNTS HELPER                          */}
+              {/* ----------------------------------------------------------- */}
+              <div className="bg-emerald-50/60 rounded-2xl p-3.5 border border-emerald-200/80 space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-bold text-emerald-950 uppercase tracking-wider">
+                  <div className="flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
+                    <span>1-Click Fast Testing Accounts:</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemoLogin('farmer')}
+                    disabled={loginLoading}
+                    className="p-2 bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-900 border border-slate-200 hover:border-emerald-300 rounded-xl text-xs font-bold shadow-xs transition-all flex flex-col items-center justify-center cursor-pointer disabled:opacity-50 text-center"
+                  >
+                    <span>🌾 Farmer Login</span>
+                    <span className="text-[10px] text-slate-500 font-normal">farmer@farmq.demo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemoLogin('admin')}
+                    disabled={loginLoading}
+                    className="p-2 bg-white hover:bg-slate-50 text-slate-800 hover:text-slate-900 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-bold shadow-xs transition-all flex flex-col items-center justify-center cursor-pointer disabled:opacity-50 text-center"
+                  >
+                    <span>🏢 Mandi Admin</span>
+                    <span className="text-[10px] text-slate-500 font-normal">admin@farmq.demo</span>
+                  </button>
+                </div>
+
+                <div className="text-center pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemoLogin('superadmin')}
+                    disabled={loginLoading}
+                    className="text-[11px] text-emerald-700 hover:text-emerald-900 hover:underline font-semibold cursor-pointer inline-flex items-center gap-1"
+                  >
+                    <Building className="w-3 h-3" />
+                    <span>or test as Director Super Admin (superadmin@farmq.demo)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Mobile switch hint */}
+              <div className="lg:hidden text-center pt-2">
+                <span className="text-xs text-slate-500">New to FarmQ? </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveMobileTab('register')}
+                  className="text-xs text-emerald-700 font-bold hover:underline cursor-pointer"
+                >
+                  Register as New Farmer →
+                </button>
+              </div>
+            </div>
+
+            {/* Encryption & Security Note */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 text-center">
+              <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Protected by SHA-256 OTP verification & 256-bit JWT session security</span>
             </div>
           </div>
 
-          {/* Error Banner */}
-          {error && (
-            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5 animate-fadeIn">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
-              <div className="flex-1 font-semibold">{error}</div>
-            </div>
-          )}
-
-          {/* Success Banner */}
-          {successMsg && !error && (
-            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 animate-fadeIn">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-              <span className="font-medium">{successMsg}</span>
-            </div>
-          )}
-
-          {/* ========================================================= */}
-          {/* STEP 1: EMAIL ENTRY FORM                                  */}
-          {/* ========================================================= */}
-          {step === 'email' && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendOtp();
-              }}
-              className="space-y-4"
-            >
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <Mail className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      if (error) setError(null);
-                    }}
-                    placeholder="farmer@example.com"
-                    autoFocus
-                    required
-                    className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm font-medium transition-all"
-                  />
+          {/* =============================================================== */}
+          {/* RIGHT COLUMN: 🌾 REGISTER AS NEW FARMER CARD                    */}
+          {/* =============================================================== */}
+          <div
+            className={`lg:col-span-7 bg-white rounded-3xl p-6 sm:p-8 border border-emerald-200/90 shadow-xl space-y-6 relative transition-all ${
+              activeMobileTab === 'register' ? 'block' : 'hidden lg:block'
+            }`}
+          >
+            {/* Header with "New to FarmQ?" badge */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-100 text-teal-900 mb-1.5">
+                  <span>New to FarmQ?</span>
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  We'll send a 6-digit secure login code to this email. New users are automatically registered.
+                <h2 className="text-2xl font-black text-slate-900 font-heading tracking-tight flex items-center gap-2">
+                  <span>🌾 Register as New Farmer</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Create your FarmQ farmer account for smart slot booking and MSP payouts
                 </p>
               </div>
+              <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
+                <Sprout className="w-5 h-5" />
+              </div>
+            </div>
 
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-500">
-                  Full Name <span className="text-[10px] text-slate-400 font-normal">(Optional for new farmers)</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <UserCheck className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="e.g. Surjeet Kumar"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm transition-all text-slate-800"
-                  />
+            {/* In-Card Step Indicator (2 Steps) */}
+            {regStep < 3 && (
+              <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200/80">
+                <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 mb-1.5">
+                  <span className={regStep >= 1 ? 'text-emerald-700 font-extrabold' : ''}>
+                    1. Personal Information & Location
+                  </span>
+                  <span className="text-slate-300">→</span>
+                  <span className={regStep >= 2 ? 'text-emerald-700 font-extrabold' : ''}>
+                    2. Bank Details
+                  </span>
+                </div>
+                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-emerald-600 to-teal-600 h-full transition-all duration-300 rounded-full"
+                    style={{ width: `${(regStep / 2) * 100}%` }}
+                  ></div>
                 </div>
               </div>
+            )}
 
-              <button
-                type="submit"
-                disabled={loading || !email.trim()}
-                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Sending Code to Email...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Send Verification Code</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
-          )}
+            {/* Registration Error Alert */}
+            {regError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5 animate-fadeIn">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                <div className="flex-1 font-semibold">{regError}</div>
+              </div>
+            )}
 
-          {/* ========================================================= */}
-          {/* STEP 2: 6-DIGIT OTP VERIFICATION                          */}
-          {/* ========================================================= */}
-          {step === 'verify' && (
-            <div className="space-y-5">
-              {/* Recipient summary & Edit Email */}
-              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                    <Mail className="w-4 h-4" />
+            {/* ------------------------------------------------------------- */}
+            {/* STEP 1: PERSONAL INFORMATION & LOCATION ONLY                  */}
+            {/* ------------------------------------------------------------- */}
+            {regStep === 1 && (
+              <form onSubmit={handleValidateRegStep1} className="space-y-4">
+                {/* 1. Personal Information */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Personal Information</span>
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Full Name *
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                          <User className="w-3.5 h-3.5" />
+                        </div>
+                        <input
+                          type="text"
+                          value={regName}
+                          onChange={(e) => setRegName(e.target.value)}
+                          placeholder="e.g. Balwant Singh"
+                          required
+                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Mobile Number (+91) *
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-xs font-bold text-slate-500">
+                          +91
+                        </div>
+                        <input
+                          type="tel"
+                          value={regMobile}
+                          onChange={(e) => setRegMobile(e.target.value)}
+                          placeholder="98765 43210"
+                          maxLength={10}
+                          required
+                          className="w-full pl-11 pr-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-[11px] text-slate-400">Code dispatched to:</div>
-                    <div className="text-xs font-bold text-slate-800 truncate">{email}</div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      Email Address *
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <Mail className="w-3.5 h-3.5" />
+                      </div>
+                      <input
+                        type="email"
+                        value={regEmail}
+                        onChange={(e) => setRegEmail(e.target.value)}
+                        placeholder="balwant.farmer@example.com"
+                        required
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Create Password *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showRegPassword ? 'text' : 'password'}
+                          value={regPassword}
+                          onChange={(e) => setRegPassword(e.target.value)}
+                          placeholder="••••••••"
+                          required
+                          className="w-full px-3 py-2.5 pr-10 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowRegPassword(!showRegPassword)}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 cursor-pointer"
+                        >
+                          {showRegPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Confirm Password *
+                      </label>
+                      <input
+                        type={showRegPassword ? 'text' : 'password'}
+                        value={regConfirmPassword}
+                        onChange={(e) => setRegConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Location */}
+                <div className="space-y-3 pt-3 border-t border-slate-100">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Location</span>
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        State *
+                      </label>
+                      <select
+                        value={regState}
+                        onChange={(e) => setRegState(e.target.value)}
+                        className="w-full px-2.5 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500 bg-white"
+                      >
+                        <option value="Haryana">Haryana</option>
+                        <option value="Punjab">Punjab</option>
+                        <option value="Uttar Pradesh">Uttar Pradesh</option>
+                        <option value="Rajasthan">Rajasthan</option>
+                        <option value="Madhya Pradesh">Madhya Pradesh</option>
+                        <option value="Gujarat">Gujarat</option>
+                        <option value="Maharashtra">Maharashtra</option>
+                        <option value="Bihar">Bihar</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        District *
+                      </label>
+                      <input
+                        type="text"
+                        value={regDistrict}
+                        onChange={(e) => setRegDistrict(e.target.value)}
+                        placeholder="e.g. Karnal"
+                        required
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Village / City *
+                      </label>
+                      <input
+                        type="text"
+                        value={regVillage}
+                        onChange={(e) => setRegVillage(e.target.value)}
+                        placeholder="e.g. Taraori"
+                        required
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Next CTA to Step 2 */}
+                <button
+                  type="submit"
+                  className="w-full mt-3 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer group"
+                >
+                  <span>Proceed to Bank Details</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </form>
+            )}
+
+            {/* ------------------------------------------------------------- */}
+            {/* STEP 2: 🏦 BANK DETAILS VALIDATION                            */}
+            {/* ------------------------------------------------------------- */}
+            {regStep === 2 && (
+              <form onSubmit={handleCompleteRegistration} className="space-y-4 animate-fadeIn">
+                <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-200/80 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-950">
+                    <CreditCard className="w-4 h-4 text-emerald-600" />
+                    <span>Direct Mandi Payouts & DBT Account</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                    <span>Step 2 of 2</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      Account Holder Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={bankAccountHolder}
+                      onChange={(e) => setBankAccountHolder(e.target.value)}
+                      placeholder="Name as printed on Bank Passbook"
+                      required
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-700">
+                      Bank Name *
+                    </label>
+                    <input
+                      type="text"
+                      list="popularBanksList"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      placeholder="e.g. State Bank of India"
+                      required
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500 bg-white"
+                    />
+                    <datalist id="popularBanksList">
+                      {POPULAR_BANKS.map((b, i) => (
+                        <option key={i} value={b} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Account Number *
+                      </label>
+                      <input
+                        type="password"
+                        value={bankAccountNum}
+                        onChange={(e) => setBankAccountNum(e.target.value)}
+                        placeholder="••••••••••••"
+                        required
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-mono font-medium focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Confirm Account Number *
+                      </label>
+                      <input
+                        type="text"
+                        value={bankConfirmAccountNum}
+                        onChange={(e) => setBankConfirmAccountNum(e.target.value)}
+                        placeholder="Re-enter Account Number"
+                        required
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-mono font-medium focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        IFSC Code *
+                      </label>
+                      <input
+                        type="text"
+                        value={bankIfsc}
+                        onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
+                        placeholder="SBIN0001234"
+                        maxLength={11}
+                        required
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Branch Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={bankBranch}
+                        onChange={(e) => setBankBranch(e.target.value)}
+                        placeholder="Taraori Mandi Branch"
+                        required
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Confirmation Checkbox */}
+                  <div className="pt-1">
+                    <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={bankConfirmed}
+                        onChange={(e) => setBankConfirmed(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer shrink-0"
+                      />
+                      <span className="font-semibold">
+                        ☑ I confirm that the bank details provided by me are correct and in my name for mandi payouts.
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setRegStep(1)}
+                    className="py-3 px-4 rounded-2xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Back</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={regLoading || !bankConfirmed}
+                    className="flex-1 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {regLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Validating & Registering...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Complete Farmer Registration</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* ------------------------------------------------------------- */}
+            {/* STEP 3: REGISTRATION SUCCESSFUL & MASKED DETAILS              */}
+            {/* ------------------------------------------------------------- */}
+            {regStep === 3 && regSuccessData && (
+              <div className="space-y-6 text-center py-4 animate-fadeIn">
+                <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center mx-auto shadow-xl shadow-emerald-600/30 text-3xl">
+                  🎉
+                </div>
+
+                <div className="space-y-1">
+                  <h3 className="text-2xl font-black text-slate-900 font-heading">
+                    Farmer Account Created Successfully!
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Welcome to FarmQ, {regSuccessData.name}. Your farmer profile has been registered.
+                  </p>
+                </div>
+
+                {/* Masked Sensitive Summary Card */}
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-left space-y-2 text-xs">
+                  <div className="flex justify-between py-1 border-b border-slate-200">
+                    <span className="text-slate-500 font-medium">Assigned Role:</span>
+                    <span className="font-bold text-emerald-800 uppercase bg-emerald-100 px-2 py-0.5 rounded-full text-[10px]">
+                      {regSuccessData.role}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-200">
+                    <span className="text-slate-500 font-medium">Registered Mobile:</span>
+                    <span className="font-mono font-bold text-slate-800">{regSuccessData.maskedMobile}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-200">
+                    <span className="text-slate-500 font-medium">Registered Email:</span>
+                    <span className="font-mono font-bold text-slate-800">{regSuccessData.maskedEmail}</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-slate-500 font-medium">Masked Payout Bank:</span>
+                    <span className="font-mono font-bold text-emerald-900">{regSuccessData.maskedBank}</span>
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setStep('email');
-                    setError(null);
-                    setSuccessMsg(null);
-                  }}
-                  className="px-2.5 py-1 text-xs text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg font-semibold flex items-center gap-1 transition-all cursor-pointer shrink-0"
+                  onClick={() => navigate('/farmer/dashboard')}
+                  className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer group"
                 >
-                  <Edit2 className="w-3 h-3" />
-                  <span>Change</span>
+                  <span>Go to Farmer Dashboard</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
                 </button>
               </div>
+            )}
 
-              {/* Dev/Demo Mode helper banner with 1-click auto fill */}
-              {demoOtp && (
-                <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-900 flex items-center justify-between gap-2">
-                  <div className="text-xs">
-                    <span className="font-bold">🔑 Demo Mode Code: </span>
-                    <span className="font-mono font-black text-amber-950 tracking-wider text-sm">{demoOtp}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAutoFillDemoOtp}
-                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    <span>Auto-fill OTP</span>
-                  </button>
-                </div>
-              )}
-
-              {/* 6 Individual Digit Inputs */}
-              <div className="space-y-2">
-                <label className="block text-center text-xs font-bold text-slate-700">
-                  Enter the 6-digit code received on your email
-                </label>
-                <div className="flex justify-between gap-2 sm:gap-3">
-                  {otp.map((digit, idx) => (
-                    <input
-                      key={idx}
-                      ref={(el) => {
-                        otpInputsRef.current[idx] = el;
-                      }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleOtpBoxChange(idx, e.target.value)}
-                      onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                      onPaste={handleOtpPaste}
-                      className={`w-11 h-13 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-black rounded-2xl border transition-all ${
-                        digit
-                          ? 'border-emerald-600 bg-emerald-50/40 text-emerald-950 ring-2 ring-emerald-500/20 shadow-sm'
-                          : 'border-slate-300 bg-white text-slate-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30'
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Verify & Login Button */}
-              <button
-                type="button"
-                onClick={() => handleVerifyOtp()}
-                disabled={loading || otp.join('').length !== 6}
-                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Verifying Code & Logging In...</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Verify OTP & Log In</span>
-                  </>
-                )}
-              </button>
-
-              {/* Resend OTP & Countdown */}
-              <div className="text-center pt-1 text-xs text-slate-500">
-                {cooldown > 0 ? (
-                  <div className="flex items-center justify-center gap-1.5 text-slate-400 font-medium">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Resend code in {cooldown}s</span>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleSendOtp()}
-                    disabled={loading}
-                    className="text-emerald-600 hover:text-emerald-700 font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Didn't receive code? Resend Email</span>
-                  </button>
-                )}
-              </div>
+            {/* Privacy & Safety Note */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 text-center">
+              <ShieldCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+              <span>Full bank account numbers are permanently masked for your safety</span>
             </div>
-          )}
-
-          {/* Security Assurance Footer */}
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-            <Lock className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Encrypted with SHA-256 OTP verification and JWT session tokens</span>
           </div>
+
         </div>
 
-        {/* 🌾 Register as New Farmer Option */}
-        <div className="bg-white rounded-3xl p-5 border border-emerald-200/90 shadow-lg text-center space-y-3">
-          <div className="flex items-center justify-center gap-2 text-emerald-950 font-bold text-sm">
-            <span>🌾 New to FarmQ? Register Your Farm</span>
-          </div>
-          <p className="text-xs text-slate-600">
-            Join thousands of farmers accessing smart queue slot bookings, live mandi crop prices, and direct DBT bank payouts.
-          </p>
-          <Link
-            to="/register"
-            className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer group"
-          >
-            <span className="text-lg">🌾</span>
-            <span>Register as New Farmer</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </Link>
-        </div>
-
-        {/* Back to Home Link */}
-        <div className="text-center">
+        {/* Back to Home Navigation Link */}
+        <div className="text-center pt-2">
           <Link
             to="/"
-            className="text-xs text-slate-500 hover:text-slate-800 font-semibold transition-colors"
+            className="text-xs text-slate-500 hover:text-slate-800 font-semibold transition-colors inline-flex items-center gap-1"
           >
             ← Back to FarmQ Home
           </Link>
         </div>
+
       </div>
     </div>
   );
 };
+
+export default LoginPage;

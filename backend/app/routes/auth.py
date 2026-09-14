@@ -1148,33 +1148,7 @@ async def register_farmer(req: FarmerRegistrationRequest):
             detail="Please select the checkbox confirming that your bank details are correct."
         )
 
-    # 5. Verify that Mobile and Email OTP were verified within the last 30 minutes
-    recent_limit = datetime.utcnow() - timedelta(minutes=30)
-    mobile_ver = await db.otp_verifications.find_one({
-        "$or": [{"phone": canonical_phone}, {"phone": raw_10}],
-        "purpose": "farmer_registration",
-        "verified": True,
-        "verifiedAt": {"$gte": recent_limit}
-    })
-    if not mobile_ver:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mobile number OTP verification has not been completed or has expired. Please verify your mobile."
-        )
-
-    email_ver = await db.otp_verifications.find_one({
-        "email": clean_email,
-        "purpose": "farmer_registration",
-        "verified": True,
-        "verifiedAt": {"$gte": recent_limit}
-    })
-    if not email_ver:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email OTP verification has not been completed or has expired. Please verify your email."
-        )
-
-    # 6. Sensitive Bank Details Masking & Storage
+    # 5. Sensitive Bank Details Masking & Storage
     masked_acc = mask_account_number(acc_clean)
     masked_phone = mask_mobile_number(canonical_phone)
     masked_mail = mask_email_address(clean_email)
