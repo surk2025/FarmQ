@@ -11,7 +11,7 @@ dependencies = [
     "numpy",
     "pandas",
     "google-auth",
-    "scikit-learn"
+    "scikit-learn",
    "pymongo",
   "pydantic",
 "email-validator",
