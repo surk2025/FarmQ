@@ -93,31 +93,31 @@ export const LandingPage: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-24 pb-20">
+    <div className="space-y-16 sm:space-y-24 pb-20 overflow-x-hidden w-full">
       {/* 1. Hero Section */}
-      <section className="relative overflow-hidden pt-12 pb-20 md:pt-20 md:pb-28 bg-gradient-to-b from-emerald-50/50 via-white to-slate-50">
+      <section className="relative overflow-hidden pt-8 pb-16 md:pt-20 md:pb-28 bg-gradient-to-b from-emerald-50/50 via-white to-slate-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
             {/* Left Copy */}
             <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-100/80 border border-emerald-200 text-emerald-800 text-xs font-bold uppercase tracking-wider">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span>Smart Agricultural Procurement & Queue Management</span>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.15] font-heading">
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.15] font-heading">
                 Smart Procurement. <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600">
                   Less Waiting.
                 </span> Better Farming.
               </h1>
 
-              <p className="text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
+              <p className="text-base sm:text-xl text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
                 FarmQ helps farmers book procurement slots, track their live queue in real time, estimate exact waiting times with AI, and monitor payments from one simple platform.
               </p>
 
               {/* Core question callout */}
-              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200/80 max-w-xl text-left">
+              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200/80 max-w-xl text-left mx-auto lg:mx-0">
                 <p className="text-xs font-bold text-amber-900 uppercase tracking-wider mb-1">Core Innovation Answered:</p>
                 <p className="text-sm font-semibold text-amber-950 italic">
                   "Farmer ko procurement center par exactly kab pahunchna chahiye?"
@@ -127,42 +127,42 @@ export const LandingPage: React.FC = () => {
                 </p>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center lg:justify-start gap-3 sm:gap-4 pt-2">
                 <Link
                   to={isAuthenticated ? "/farmer/book" : "/login"}
-                  className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/40 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto px-8 py-3.5 sm:py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/40 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
                 >
                   <span>{t('getStarted')}</span>
                   <ArrowRight className="w-5 h-5" />
                 </Link>
                 <a
                   href="#how-it-works"
-                  className="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-base border border-slate-200 shadow-xs transition-colors flex items-center justify-center"
+                  className="w-full sm:w-auto px-7 py-3.5 sm:py-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-base border border-slate-200 shadow-xs transition-colors flex items-center justify-center"
                 >
                   {t('howItWorks')}
                 </a>
               </div>
 
               {/* Trust Badges */}
-              <div className="pt-6 flex items-center justify-center lg:justify-start gap-6 text-xs text-slate-500 font-medium">
+              <div className="pt-4 sm:pt-6 flex flex-wrap items-center justify-center lg:justify-start gap-3 sm:gap-6 text-xs text-slate-500 font-medium">
                 <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>Real-time WebSockets</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>AI ML Wait Predictor</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>English & हिन्दी</span>
                 </div>
               </div>
             </div>
 
             {/* Right Dashboard Mockup Card */}
-            <div className="lg:col-span-5">
-              <div className="relative mx-auto max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-slate-200/80 transform hover:-translate-y-1 transition-transform">
+            <div className="lg:col-span-5 w-full">
+              <div className="relative mx-auto max-w-md w-full bg-white rounded-3xl p-4 sm:p-6 shadow-2xl border border-slate-200/80 transform hover:-translate-y-1 transition-transform">
                 {/* Mock Card Header */}
                 <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                   <div className="flex items-center gap-2">
@@ -223,15 +223,15 @@ export const LandingPage: React.FC = () => {
 
       {/* 2. Problem vs Solution Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
           {/* Problem Card */}
-          <div className="bg-rose-50/70 rounded-3xl p-8 border border-rose-100 relative overflow-hidden">
+          <div className="bg-rose-50/70 rounded-3xl p-6 sm:p-8 border border-rose-100 relative overflow-hidden">
             <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-6">
               <AlertTriangle className="w-6 h-6" />
             </div>
-            <h3 className="text-2xl font-bold text-rose-950 font-heading mb-3">{t('problemTitle')}</h3>
-            <p className="text-sm text-rose-900/80 mb-6 leading-relaxed">{t('problemSubtitle')}</p>
-            <ul className="space-y-3 text-sm text-rose-900 font-medium">
+            <h3 className="text-xl sm:text-2xl font-bold text-rose-950 font-heading mb-3">{t('problemTitle')}</h3>
+            <p className="text-xs sm:text-sm text-rose-900/80 mb-6 leading-relaxed">{t('problemSubtitle')}</p>
+            <ul className="space-y-3 text-xs sm:text-sm text-rose-900 font-medium">
               <li className="flex items-start gap-2.5">
                 <span className="text-rose-500 font-bold">✕</span>
                 <span><strong>Uncertain Schedules:</strong> Farmers wait 6 to 14 hours in harsh weather without knowing when their crop will be weighed.</span>
@@ -252,13 +252,13 @@ export const LandingPage: React.FC = () => {
           </div>
 
           {/* Solution Card */}
-          <div className="bg-emerald-50/70 rounded-3xl p-8 border border-emerald-100 relative overflow-hidden">
+          <div className="bg-emerald-50/70 rounded-3xl p-6 sm:p-8 border border-emerald-100 relative overflow-hidden">
             <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-6">
               <CheckCircle2 className="w-6 h-6" />
             </div>
-            <h3 className="text-2xl font-bold text-emerald-950 font-heading mb-3">{t('solutionTitle')}</h3>
-            <p className="text-sm text-emerald-900/80 mb-6 leading-relaxed">{t('solutionSubtitle')}</p>
-            <ul className="space-y-3 text-sm text-emerald-900 font-medium">
+            <h3 className="text-xl sm:text-2xl font-bold text-emerald-950 font-heading mb-3">{t('solutionTitle')}</h3>
+            <p className="text-xs sm:text-sm text-emerald-900/80 mb-6 leading-relaxed">{t('solutionSubtitle')}</p>
+            <ul className="space-y-3 text-xs sm:text-sm text-emerald-900 font-medium">
               <li className="flex items-start gap-2.5">
                 <span className="text-emerald-600 font-bold">✓</span>
                 <span><strong>Guaranteed Digital Slot:</strong> Select an exact 1-hour window. Get an instant verified token with QR code.</span>
@@ -282,32 +282,32 @@ export const LandingPage: React.FC = () => {
 
       {/* 3. Demo Statistics */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-slate-900 rounded-3xl p-8 md:p-12 text-white shadow-xl">
-          <div className="text-center max-w-2xl mx-auto mb-10">
+        <div className="bg-slate-900 rounded-3xl p-6 sm:p-8 md:p-12 text-white shadow-xl">
+          <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
             <h3 className="text-2xl sm:text-3xl font-bold font-heading">Measured Impact on Mandi Operations</h3>
             <p className="text-xs text-slate-400 mt-1 uppercase tracking-wider">{t('demoStatsNotice')}</p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700">
-              <Users className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
-              <p className="text-3xl font-black font-heading text-white">{t('statFarmers')}</p>
-              <p className="text-xs text-slate-400 mt-1">Registered & Active</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 text-center">
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-800/60 border border-slate-700">
+              <Users className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400 mx-auto mb-2" />
+              <p className="text-2xl sm:text-3xl font-black font-heading text-white">{t('statFarmers')}</p>
+              <p className="text-[11px] sm:text-xs text-slate-400 mt-1">Registered & Active</p>
             </div>
-            <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700">
-              <Building2 className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
-              <p className="text-3xl font-black font-heading text-white">{t('statCenters')}</p>
-              <p className="text-xs text-slate-400 mt-1">Smart Mandi Centers</p>
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-800/60 border border-slate-700">
+              <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400 mx-auto mb-2" />
+              <p className="text-2xl sm:text-3xl font-black font-heading text-white">{t('statCenters')}</p>
+              <p className="text-[11px] sm:text-xs text-slate-400 mt-1">Smart Mandi Centers</p>
             </div>
-            <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700">
-              <CalendarCheck className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
-              <p className="text-3xl font-black font-heading text-white">{t('statSlots')}</p>
-              <p className="text-xs text-slate-400 mt-1">Digital Appointments</p>
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-800/60 border border-slate-700">
+              <CalendarCheck className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400 mx-auto mb-2" />
+              <p className="text-2xl sm:text-3xl font-black font-heading text-white">{t('statSlots')}</p>
+              <p className="text-[11px] sm:text-xs text-slate-400 mt-1">Digital Appointments</p>
             </div>
-            <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700">
-              <TrendingDown className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
-              <p className="text-3xl font-black font-heading text-emerald-400">{t('statWaitReduction')}</p>
-              <p className="text-xs text-slate-400 mt-1">Verified Time Saved</p>
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-800/60 border border-slate-700">
+              <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400 mx-auto mb-2" />
+              <p className="text-2xl sm:text-3xl font-black font-heading text-emerald-400">{t('statWaitReduction')}</p>
+              <p className="text-[11px] sm:text-xs text-slate-400 mt-1">Verified Time Saved</p>
             </div>
           </div>
         </div>
@@ -315,23 +315,23 @@ export const LandingPage: React.FC = () => {
 
       {/* 4. Core Features */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-16 space-y-3">
+        <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-16 space-y-3">
           <span className="text-xs font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
             System Features
           </span>
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 font-heading">
+          <h2 className="text-2xl sm:text-4xl font-black text-slate-900 font-heading">
             Built for Farmers. Designed for Speed.
           </h2>
-          <p className="text-base text-slate-600">
+          <p className="text-sm sm:text-base text-slate-600">
             Every feature in FarmQ is engineered to respect farmers' valuable time and streamline procurement operations.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {features.map((f, i) => {
             const Icon = f.icon;
             return (
-              <div key={i} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs hover:shadow-md hover:border-emerald-300 transition-all group">
+              <div key={i} className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs hover:shadow-md hover:border-emerald-300 transition-all group">
                 <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                   <Icon className="w-6 h-6" />
                 </div>
@@ -345,21 +345,21 @@ export const LandingPage: React.FC = () => {
 
       {/* 5. How It Works (Step by Step Workflow) */}
       <section id="how-it-works" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-16 space-y-3">
+        <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-16 space-y-3">
           <span className="text-xs font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
             {t('howItWorks')}
           </span>
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 font-heading">
+          <h2 className="text-2xl sm:text-4xl font-black text-slate-900 font-heading">
             The Complete Farmer Journey
           </h2>
-          <p className="text-base text-slate-600">
+          <p className="text-sm sm:text-base text-slate-600">
             From registration in your village to direct bank payment in 9 transparent steps.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {workflowSteps.map((step, idx) => (
-            <div key={idx} className="relative bg-white rounded-2xl p-6 border border-slate-200 shadow-xs hover:border-emerald-300 transition-colors">
+            <div key={idx} className="relative bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs hover:border-emerald-300 transition-colors">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-2xl font-black text-emerald-600 font-heading">{step.num}</span>
                 <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
@@ -433,24 +433,24 @@ export const LandingPage: React.FC = () => {
 
       {/* 7. Call To Action Footer Banner */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="rounded-3xl bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 p-10 md:p-14 text-white text-center shadow-2xl relative overflow-hidden">
+        <div className="rounded-3xl bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 p-6 sm:p-10 md:p-14 text-white text-center shadow-2xl relative overflow-hidden">
           <div className="max-w-2xl mx-auto space-y-6">
-            <h2 className="text-3xl sm:text-4xl font-black font-heading">
+            <h2 className="text-2xl sm:text-4xl font-black font-heading">
               Ready to experience queue-free procurement?
             </h2>
-            <p className="text-emerald-100 text-base">
+            <p className="text-emerald-100 text-sm sm:text-base">
               Join over 1,250 farmers saving hours at the mandi. Register your harvest lot and get your priority token today.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 pt-2">
               <Link
                 to="/register"
-                className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-white text-emerald-900 hover:bg-slate-100 font-bold text-sm shadow-md transition-colors"
+                className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-white text-emerald-900 hover:bg-slate-100 font-bold text-sm shadow-md transition-colors text-center"
               >
                 Register as Farmer
               </Link>
               <Link
                 to="/login"
-                className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-emerald-800/80 hover:bg-emerald-800 text-white font-bold text-sm border border-emerald-500/40 transition-colors"
+                className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-emerald-800/80 hover:bg-emerald-800 text-white font-bold text-sm border border-emerald-500/40 transition-colors text-center"
               >
                 Login to Dashboard
               </Link>
